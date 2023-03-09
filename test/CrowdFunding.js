@@ -65,8 +65,7 @@ describe("CrowdFunding", function () {
             await expect(crowdFunding.connect(bob).fundProject(1, 900)).to.emit(crowdFunding, "ProjectFunded").withArgs(1, bob.address, 900);
 
             const contribution = await crowdFunding.contributions(1, bob.address);
-            expect(contribution.contributor).to.equal(bob.address);
-            expect(contribution.amount).to.equal(900);
+            expect(contribution).to.equal(900);
             
             expect(await myToken.balanceOf(bob.address)).to.equal(100);
         });
@@ -112,6 +111,14 @@ describe("CrowdFunding", function () {
             expect(await myToken.balanceOf(owner.address)).to.equal(fee);
             expect(await myToken.balanceOf(alice.address)).to.equal(2000 - fee);
         });
+
+        it("Can only be called by the project owner", async function () {
+            const { crowdFunding, myToken, alice, bob } = await loadFixture(deployAndCreateProject);
+    
+            await myToken.connect(bob).approve(crowdFunding.address, 1000);
+            await crowdFunding.connect(bob).fundProject(1, 1000);
+            await expect(crowdFunding.connect(bob).endProject(1)).to.be.revertedWithCustomError(crowdFunding, "CallerNotProjectOwner");
+        });
     
         it("Fails when the deadline is not passed", async function () {
             const { crowdFunding, myToken, alice, bob } = await loadFixture(deployAndCreateProject);
@@ -119,6 +126,18 @@ describe("CrowdFunding", function () {
             await myToken.connect(bob).approve(crowdFunding.address, 1000);
             await crowdFunding.connect(bob).fundProject(1, 1000);
             await expect(crowdFunding.connect(alice).endProject(1)).to.be.revertedWithCustomError(crowdFunding, "DeadlineNotPassedYet");
+        });
+
+        it("Fails when the proejct has already ended", async function () {
+            const { crowdFunding, myToken, deadline, alice, bob } = await loadFixture(deployAndCreateProject);
+    
+            await myToken.connect(bob).approve(crowdFunding.address, 1000);
+            await crowdFunding.connect(bob).fundProject(1, 1000);
+
+            await time.increaseTo(deadline);
+
+            await crowdFunding.connect(alice).endProject(1)
+            await expect(crowdFunding.connect(alice).endProject(1)).to.be.revertedWithCustomError(crowdFunding, "ProjectAlreadyEnded");
         });
     });
 
@@ -136,8 +155,7 @@ describe("CrowdFunding", function () {
             expect(await myToken.balanceOf(bob.address)).to.equal(1000);
             
             const contribution = await crowdFunding.contributions(1, bob.address);
-            expect(contribution.contributor).to.equal(bob.address);
-            expect(contribution.amount).to.equal(0);
+            expect(contribution).to.equal(0);
         });
 
         it("Fails when the project is not ended yet", async function () {

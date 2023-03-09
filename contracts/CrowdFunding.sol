@@ -9,16 +9,16 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 error InvalidTokenAddress();
 error InvalidFeeScaleFactor();
 error InvalidFeeRate();
-error CallerNotProjectOwner();
+error InvalidProjectId();
 error InvalidGoal();
+error InvalidAmount();
 error InvalidDeadline(uint256 minPossible);
+error CallerNotProjectOwner();
 error ProjectAlreadyEnded();
 error ProjectNotEndedYet();
 error DeadlineAlreadyPassed();
 error DeadlineNotPassedYet();
-error InvalidAmount();
 error CannotWithdrawFromSuccessfulProject();
-error InvalidProjectId();
 
 contract CrowdFunding is Ownable {
     using SafeERC20 for IERC20;
@@ -33,18 +33,22 @@ contract CrowdFunding is Ownable {
         bool succeeded;
     }
 
-    struct Contribution {
-        address contributor;
-        uint256 amount;
-    }
-
     uint256 public numProjects;
     mapping (uint256 => Project) public projects;
-    mapping (uint256 => mapping (address => Contribution)) public contributions;
+    mapping (uint256 => mapping (address => uint256)) public contributions;
 
     IERC20 public immutable TOKEN;
     uint256 public immutable FEE_RATE;
     uint256 public immutable FEE_SCALE_FACTOR;
+
+    event ProjectCreated(uint256 projectId, address owner, uint256 goal, uint256 deadline);
+    event ProjectFunded(uint256 projectId, address contributor, uint256 amount);
+    event ProjectEnded(uint256 projectId, bool succeeded);
+
+    modifier onlyProjectOwner(uint256 projectId) {
+        if (msg.sender != projects[projectId].owner) revert CallerNotProjectOwner();
+        _;
+    }
 
     constructor(address tokenAddress, uint256 feeRate, uint256 feeScaleFactor) {
         if (tokenAddress == address(0)) revert InvalidTokenAddress();
@@ -54,15 +58,6 @@ contract CrowdFunding is Ownable {
         TOKEN = IERC20(tokenAddress);
         FEE_RATE = feeRate;
         FEE_SCALE_FACTOR = feeScaleFactor;
-    }
-
-    event ProjectCreated(uint256 projectId, address owner, uint256 goal, uint256 deadline);
-    event ProjectFunded(uint256 projectId, address contributor, uint256 amount);
-    event ProjectEnded(uint256 projectId, bool succeeded);
-
-    modifier onlyProjectOwner(uint256 projectId) {
-        if (msg.sender != projects[projectId].owner) revert CallerNotProjectOwner();
-        _;
     }
 
     function createProject(uint256 goal, uint256 deadline) external {
@@ -77,15 +72,13 @@ contract CrowdFunding is Ownable {
 
     function fundProject(uint256 projectId, uint256 amount) external {
         if (projectId == 0 || projectId > numProjects) revert InvalidProjectId();
+        if (amount == 0) revert InvalidAmount();
 
         Project storage project = projects[projectId];
         if (project.ended) revert ProjectAlreadyEnded();
         if (project.deadline <= block.timestamp) revert DeadlineAlreadyPassed();
-        if (amount == 0) revert InvalidAmount();
 
-        Contribution storage contribution = contributions[projectId][msg.sender];
-        contribution.contributor = msg.sender;
-        contribution.amount += amount;
+        contributions[projectId][msg.sender] += amount;
         project.amountRaised += amount;
 
         emit ProjectFunded(projectId, msg.sender, amount);
@@ -124,11 +117,10 @@ contract CrowdFunding is Ownable {
         if (!project.ended) revert ProjectNotEndedYet();
         if (project.succeeded) revert CannotWithdrawFromSuccessfulProject();
 
-        Contribution storage contribution = contributions[projectId][msg.sender];
-        uint256 amountToWithdraw = contribution.amount;
+        uint256 amountToWithdraw = contributions[projectId][msg.sender];
         if (amountToWithdraw > 0) {
             project.amountRaised -= amountToWithdraw;
-            contribution.amount = 0;
+            contributions[projectId][msg.sender] = 0;
 
             emit ProjectFunded(projectId, msg.sender, 0);
             

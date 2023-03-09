@@ -1,13 +1,8 @@
-# Sample Hardhat Project
+# Simple CrowdFunding Project
 
-This project demonstrates a basic Hardhat use case. It comes with a sample contract, a test for that contract, and a script that deploys that contract.
-
-Try running some of the following tasks:
-
-```shell
-npx hardhat help
-npx hardhat test
-REPORT_GAS=true npx hardhat test
-npx hardhat node
-npx hardhat run scripts/deploy.js
-```
+This repository contains smart contract, its deployment script and test scripts.
+The smart contract has following features:
+● Project owners can create a new crowdfunding project.
+● Every new crowdfunded project has a timeline and a funding goal.
+● Users can fund different projects within the timeline.
+● If the funds are not successfully raised by the time the campaign ends, users should be able to withdraw their funds.
